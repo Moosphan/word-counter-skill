@@ -1,0 +1,58 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without the leading v, for example 0.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "${GITHUB_OUTPUT}"
+            echo "tag=v${{ github.event.inputs.version }}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> "${GITHUB_OUTPUT}"
+            echo "tag=${GITHUB_REF_NAME}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Sync runtime into skill packages
+        run: python3 scripts/sync_skill_runtime.py
+
+      - name: Run realistic smoke tests
+        run: python3 scripts/smoke_test_skills.py
+
+      - name: Build release archives
+        run: python3 scripts/package_skills.py --version "${{ steps.version.outputs.version }}" --clean
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Word Counter Skills ${{ steps.version.outputs.version }}
+          files: |
+            dist/*.zip
+            dist/*.json

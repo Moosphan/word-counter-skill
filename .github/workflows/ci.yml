@@ -6,12 +6,17 @@ on:
       - "**"
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test-and-package:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
 
       - uses: actions/setup-python@v5
         with:
